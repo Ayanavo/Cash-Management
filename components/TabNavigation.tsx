@@ -1,18 +1,23 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { History, Home, Settings } from 'lucide-react-native';
 import * as React from 'react';
 import HistoryScreen from '../app/History';
 import HomeScreen from '../app/Home';
 import SettingsScreen from '../app/Settings';
-// import { Home } from 'lucide-react-native';
 
 const Tab = createBottomTabNavigator();
 
 export default function TabNavigator() {
     return (
-        <Tab.Navigator screenOptions={{ headerShown: false }}>
-            <Tab.Screen name="Home" component={HomeScreen} />
-            <Tab.Screen name="Settings" component={SettingsScreen} />
-            <Tab.Screen name="History" component={HistoryScreen} />
+        <Tab.Navigator
+            screenOptions={({ route }) => ({
+                headerShown: false,
+                tabBarShowLabel: false,
+            })}
+        >
+            <Tab.Screen name="History" component={HistoryScreen} options={{ tabBarIcon: ({ focused }) => <History size={22} color={focused ? "#000" : "#7d7d7d"} /> }} />
+            <Tab.Screen name="Home" component={HomeScreen} options={{ tabBarIcon: ({ focused }) => <Home size={22} color={focused ? "#000" : "#7d7d7d"} /> }} />
+            <Tab.Screen name="Settings" component={SettingsScreen} options={{ tabBarIcon: ({ focused }) => <Settings size={22} color={focused ? "#000" : "#7d7d7d"} /> }} />
         </Tab.Navigator>
     );
 }
