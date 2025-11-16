@@ -1,8 +1,9 @@
-import { Copy, Eye, EyeOff } from 'lucide-react-native';
+import { Plus } from 'lucide-react-native';
 import * as React from 'react';
 import { useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Text, TouchableHighlight, View } from 'react-native';
 import { formatCurrency } from '../utils/currencyFormater';
+import AddInvestmentModal from './AddInvestmentModal';
 
 type DisplayAssetProps = {
   balance?: number;
@@ -15,37 +16,38 @@ export default function DisplayAsset({
   currencySymbol = '$',
   accountNumber = '1289440585',
 }: DisplayAssetProps) {
-  const [hidden, setHidden] = useState(false);
 
-  const formatted = formatCurrency(balance, currencySymbol);
-  const hiddenText = `${currencySymbol}•••••••`;
+  const [showModal, setShowModal] = useState(false);
+
+  const handlePress = () => {
+    setShowModal(true);
+  };
 
   return (
-    <>
-      {/* <Pressable
-                onPress={() => setHidden(v => !v)}
-                className="absolute right-4 top-4 rounded-full bg-gray-100 p-2"
-                hitSlop={8}
-            >
-                {hidden ? <EyeOff size={18} color="#111827" /> : <Eye size={18} color="#111827" />}
-            </Pressable> */}
+    <View>
       <View className="bg-white rounded-2xl p-6 mb-6 shadow-sm border border-gray-200">
         <View className="space-y-2">
-          <Text className="text-lg text-gray-600">Account balance</Text>
-          <Text className="text-4xl font-bold text-gray-900">$34,567.90</Text>
-          <Text className="text-xs text-gray-500">128944058</Text>
+          <Text className="text-sm text-gray-600">Account balance</Text>
+          <Text className="text-4xl font-bold text-center text-gray-900">{formatCurrency(balance, currencySymbol)}</Text>
+          <Text className="text-xs text-gray-500">{accountNumber}</Text>
         </View>
       </View>
-      {/* <Text className="text-center text-gray-500">Account balance</Text>
 
-            <Text className="mt-2 text-center text-4xl font-extrabold text-black">
-                {hidden ? hiddenText : formatted}
-            </Text>
+      {/* Actions */}
+      <View className=" rounded-2xl p-4 mb-6 shadow-sm border border-gray-200" style={{ backgroundColor: 'white', marginBottom: 20 }}>
+        <TouchableHighlight
+          className="flex-row items-center justify-center rounded-xl py-3"
+          activeOpacity={0.7}
+          onPress={handlePress}
+        >
+          <View className="flex-row items-center px-4 py-2 rounded-xl " style={{ backgroundColor: '#4F46E5' , borderRadius: 12}}>
+            <Plus color={'white'} size={18} />
+            <Text style={{ color: 'white' }} className="font-semibold ml-2">Add investment</Text>
+          </View>
+        </TouchableHighlight>
+      </View>
 
-            <View className="mt-3 flex-row items-center justify-center gap-2">
-                <Copy size={16} color="#6b7280" />
-                <Text className="text-gray-500">{accountNumber}</Text>
-            </View> */}
-    </>
+      <AddInvestmentModal visible={showModal} onClose={() => setShowModal(false)} />
+    </View>
   );
 }
