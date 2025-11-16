@@ -1,28 +1,90 @@
-import { FlatList, Text, View } from "react-native";
+import { ArrowUpDown } from "lucide-react-native";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { ActivityIndicator, FlatList, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { showErrorToast, showSuccessToast } from "../utils/toast";
+import InvestmentDetailsSheet, { Transaction as Txn } from "./InvestmentDetailsSheet";
+import { listInvestmentDocuments, updateInvestmentStatus } from "../services/appwrite";
+import { emitInvestmentsChanged, onInvestmentsChanged } from "../services/events";
 
 type Transaction = {
+    id?: string;
     name: string;
     amount: string;
     status: string;
+    priority: string;
 };
 
 export default function InvestmentList() {
-    const transactions: Transaction[] = [
-        { name: 'Ada Femi', amount: '$1,923', status: 'Pending' },
-        { name: 'Musa Adebayor', amount: '$1,532', status: 'Pending' },
-        { name: 'Nneka Malik', amount: '$950', status: 'Paid' },
-        { name: 'John Doe', amount: '$2,450', status: 'Paid' },
-        { name: 'Jane Smith', amount: '$3,100', status: 'Pending' },
-        { name: 'Samuel Kofi', amount: '$780', status: 'Paid' },
-        { name: 'Aisha Bello', amount: '$4,200', status: 'Pending' },
-        { name: 'Carlos Mendez', amount: '$610', status: 'Paid' },
-        { name: 'Priya Patel', amount: '$1,150', status: 'Pending' },
-        { name: 'Liam O\'Connor', amount: '$2,800', status: 'Paid' },
-        { name: 'Zara Khan', amount: '$540', status: 'Pending' },
-        { name: 'Ethan Hawk', amount: '$4,300', status: 'Paid' },
-        { name: 'Leota Adebayo', amount: '$32', status: 'Pending' },
-        { name: 'Zorhan Mamdani', amount: '$950', status: 'Paid' },
-    ];
+    const [transactions, setTransactions] = useState<Transaction[]>([]);
+    const [loading, setLoading] = useState<boolean>(true);
+
+    const [selected, setSelected] = useState<Transaction | null>(null);
+    const [visible, setVisible] = useState(false);
+    const [sortPendingFirst, setSortPendingFirst] = useState(false);
+
+    const handleUpdateStatus = useCallback(
+        async (id: string, status: 'paid' | 'pending' | 'dismissed') => {
+            try {
+                await updateInvestmentStatus(id, status);
+                emitInvestmentsChanged();
+                if (status === 'paid') {
+                    showSuccessToast('Payment completed', 'The investment has been marked as paid.');
+                } else {
+                    showSuccessToast('Updated', `Status changed to ${status}.`);
+                }
+            } catch (e: any) {
+                showErrorToast('Update failed', e?.message ?? 'Could not update investment status.');
+            }
+        },
+        [],
+    );
+
+    const load = useCallback(async () => {
+        try {
+            setLoading(true);
+            const docs = await listInvestmentDocuments();
+            const mapped: Transaction[] = docs.map((d: any) => {
+                const amtNum = Number(d.amount ?? 0);
+                const amount = isNaN(amtNum)
+                    ? `${d.amount}`
+                    : `$${amtNum.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                return {
+                    id: d.$id,
+                    name: d.name ?? '-',
+                    amount,
+                    status: d.status ?? 'Pending',
+                    priority: d.priority ?? 'Low'
+                };
+            });
+            setTransactions(mapped);
+        } catch (e: any) {
+            showErrorToast('Failed to load', e?.message ?? 'Could not fetch investments.');
+            setTransactions([]);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        void load();
+        const unsubscribe = onInvestmentsChanged(() => {
+            void load();
+        });
+        return () => {
+            unsubscribe();
+        };
+    }, [load]);
+
+    const sortedData = useMemo(() => {
+        if (!sortPendingFirst) return transactions;
+        const order = (status: string) => {
+            const s = status.toLowerCase();
+            if (s === 'pending') return 0;
+            if (s === 'paid') return 1;
+            return 2;
+        };
+        return [...transactions].sort((a, b) => order(a.status) - order(b.status));
+    }, [sortPendingFirst, transactions]);
 
     type BadgeStyles = { container: any; text: any };
     const getBadgeStyles = (status: string): BadgeStyles => {
@@ -47,7 +109,7 @@ export default function InvestmentList() {
                     container: { ...baseContainer, backgroundColor: '#FEF3C7' }, // amber-200/amber-500
                     text: { ...baseText, color: '#92400E' }, // amber-900
                 };
-            case 'failed':
+            case 'dismissed':
                 return {
                     container: { ...baseContainer, backgroundColor: '#FECACA' }, // rose/red-200/red-400
                     text: { ...baseText, color: '#7F1D1D' }, // red-900
@@ -63,7 +125,15 @@ export default function InvestmentList() {
     const renderItem = ({ item }: { item: Transaction }) => {
         const badge = getBadgeStyles(item.status);
         return (
-            <View className="bg-white rounded-xl p-4 flex-row items-center justify-between shadow-sm border border-gray-200">
+            <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => {
+                    setSelected(item);
+                    setVisible(true);
+                }}
+                className="bg-white rounded-xl p-4"
+                style={styles.cardRow}
+            >
                 <Text className="text-gray-700 text-sm font-semibold" numberOfLines={1}>
                     {item.name}
                 </Text>
@@ -71,17 +141,109 @@ export default function InvestmentList() {
                 <View style={badge.container}>
                     <Text style={badge.text}>{item.status}</Text>
                 </View>
-            </View>
+            </TouchableOpacity>
         );
     };
 
     return (
-        <FlatList
-            data={transactions}
-            renderItem={renderItem}
-            keyExtractor={item => item.name}
-            ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
-            showsVerticalScrollIndicator={false}
-        />
+        <>
+            <View style={styles.sortRow}>
+                <TouchableOpacity
+                    style={[styles.sortButton, sortPendingFirst && styles.sortButtonActive]}
+                    onPress={() => setSortPendingFirst((v) => !v)}
+                    activeOpacity={0.85}
+                >
+                    <View style={styles.sortContent}>
+                        <ArrowUpDown size={16} color={sortPendingFirst ? '#FFFFFF' : '#111827'} />
+                        <Text style={[styles.sortButtonText, sortPendingFirst && styles.sortButtonTextActive]}>
+                            {sortPendingFirst ? 'Clear sort' : 'Sort: Pending first'}
+                        </Text>
+                    </View>
+                </TouchableOpacity>
+            </View>
+            {loading ? (
+                <View style={{ paddingTop: 24 }}>
+                    <ActivityIndicator />
+                </View>
+            ) : sortedData.length === 0 ? (
+                <View style={styles.emptyWrap}>
+                    <Text style={styles.emptyText}>No records available</Text>
+                </View>
+            ) : (
+                <FlatList
+                    data={sortedData}
+                    renderItem={renderItem}
+                    keyExtractor={item => item.id ?? item.name}
+                    ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
+                    showsVerticalScrollIndicator={false}
+                />
+            )}
+
+            <InvestmentDetailsSheet
+                visible={visible}
+                onClose={() => setVisible(false)}
+                transaction={selected as unknown as Txn | null}
+                onPaymentComplete={async () => {
+                    if (selected?.id) {
+                        await handleUpdateStatus(selected.id, 'paid');
+                    } else {
+                        showErrorToast('Update failed', 'Missing investment identifier.');
+                    }
+                    setVisible(false);
+                }}
+            />
+        </>
     );
 }
+
+const styles = StyleSheet.create({
+    cardRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        shadowColor: '#000',
+        shadowOpacity: 0.05,
+        shadowOffset: { width: 0, height: 1 },
+        shadowRadius: 2,
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+    },
+    sortRow: {
+        flexDirection: 'row',
+        justifyContent: 'flex-end',
+        paddingBottom: 8,
+    },
+    sortButton: {
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 999,
+        backgroundColor: '#F3F4F6',
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+    },
+    sortButtonActive: {
+        backgroundColor: '#111827',
+        borderColor: '#111827',
+    },
+    sortButtonText: {
+        color: '#111827',
+        fontWeight: '600',
+        fontSize: 12,
+    },
+    sortButtonTextActive: {
+        color: '#FFFFFF',
+    },
+    sortContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    emptyWrap: {
+        paddingVertical: 32,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    emptyText: {
+        color: '#6B7280',
+        fontSize: 14,
+    },
+});
