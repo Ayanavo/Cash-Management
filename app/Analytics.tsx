@@ -1,7 +1,8 @@
 import * as React from 'react';
 import { View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import ChartComponent, { ChartPoint } from '../components/ChartComponent';
+import ChartComponent from '../components/ChartComponent';
+import { ChartPoint } from '../interfaces/components.types';
 
 export default function AnalyticsScreen() {
     const data: ChartPoint[] = [

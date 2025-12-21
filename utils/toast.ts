@@ -1,6 +1,5 @@
 import Toast from 'react-native-toast-message';
-
-type ToastPosition = 'top' | 'bottom';
+import type { ToastPosition } from '../interfaces/components.types';
 
 export function showSuccessToast(title: string, message?: string, position: ToastPosition = 'top') {
 	Toast.show({

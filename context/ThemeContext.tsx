@@ -1,15 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
-type ThemeMode = 'light' | 'dark';
-
-type ThemeContextValue = {
-	mode: ThemeMode;
-	isDark: boolean;
-	setMode: (mode: ThemeMode) => Promise<void>;
-	toggle: () => Promise<void>;
-	loading: boolean;
-};
+import type { ThemeMode, ThemeContextValue } from '../interfaces/components.types';
 
 const STORAGE_KEY = 'app_theme_mode';
 

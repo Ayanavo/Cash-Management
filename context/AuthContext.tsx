@@ -1,16 +1,9 @@
 import React, { createContext, useContext, useEffect, useMemo, useState, ReactNode, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { initAppwrite } from '../services/appwrite';
+import { initAppwrite } from '../services/appwrite/client';
+import { upsertProfileSettings } from '../services/appwrite/appwrite';
 import { ID } from 'appwrite';
-
-type AuthContextValue = {
-	isAuthenticated: boolean;
-	isLoading: boolean;
-	login: (email: string, password: string) => Promise<{ ok: boolean; message: string }>;
-	register: (name: string, email: string, password: string) => Promise<{ ok: boolean; message: string }>;
-	logout: () => Promise<void>;
-	user: { id: string; email: string; name?: string } | null;
-};
+import type { AuthContextValue } from '../interfaces/components.types';
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
@@ -55,6 +48,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 			await account.createEmailPasswordSession({ email, password });
 			const me = await account.get();
 			const minimal = { id: me.$id, email: me.email, name: (me as any).name as string | undefined };
+			// Onboarding: ensure default profile settings exist before loading dashboard
+			try {
+				await upsertProfileSettings({
+					dateFormat: 'DD-MM-YYYY',
+					currencyCode: 'USD',
+					recurringResetByPeriod: false,
+					isDarkTheme: false,
+					range: '1M',
+				});
+			} catch {
+				// Do not block onboarding if settings save fails
+			}
 			await AsyncStorage.setItem(AUTH_KEY, JSON.stringify(minimal));
 			setIsAuthenticated(true);
 			setUser(minimal);
@@ -71,7 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 	const register = useCallback(async (name: string, email: string, password: string) => {
 		if (!name || !email || !password) {
-		 return { ok: false, message: 'All fields are required' };
+			return { ok: false, message: 'All fields are required' };
 		}
 		const { account } = initAppwrite();
 		try {
