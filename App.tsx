@@ -4,7 +4,11 @@ import {
   RobotoMono_600SemiBold,
 } from '@expo-google-fonts/roboto-mono';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
-import { DarkTheme, DefaultTheme, NavigationContainer } from '@react-navigation/native';
+import {
+  DarkTheme,
+  DefaultTheme,
+  NavigationContainer,
+} from '@react-navigation/native';
 import { ThemeProvider as RestyleThemeProvider } from '@shopify/restyle';
 import { useFonts } from 'expo-font';
 import { useState } from 'react';
@@ -66,11 +70,15 @@ function ThemedNavigation() {
     colors: {
       ...navigationBaseTheme.colors,
       primary: isDark ? darkTheme.colors.primary : lightTheme.colors.primary,
-      background: isDark ? darkTheme.colors.background : lightTheme.colors.background,
+      background: isDark
+        ? darkTheme.colors.background
+        : lightTheme.colors.background,
       card: isDark ? darkTheme.colors.card : lightTheme.colors.card,
       text: isDark ? darkTheme.colors.foreground : lightTheme.colors.foreground,
       border: isDark ? darkTheme.colors.border : lightTheme.colors.border,
-      notification: isDark ? darkTheme.colors.destructive : lightTheme.colors.destructive,
+      notification: isDark
+        ? darkTheme.colors.destructive
+        : lightTheme.colors.destructive,
     },
   };
 
@@ -94,17 +102,17 @@ function ThemedNavigation() {
 
   return (
     <RestyleThemeProvider theme={isDark ? darkTheme : lightTheme}>
-      <BottomSheetModalProvider>
-        <NavigationContainer theme={navigationTheme}>
-          <DateFormatProvider>
-            <AuthProvider>
+      <AuthProvider>
+        <BottomSheetModalProvider>
+          <NavigationContainer theme={navigationTheme}>
+            <DateFormatProvider>
               <PreferencesProvider>
                 <RootRouter />
               </PreferencesProvider>
-            </AuthProvider>
-          </DateFormatProvider>
-        </NavigationContainer>
-      </BottomSheetModalProvider>
+            </DateFormatProvider>
+          </NavigationContainer>
+        </BottomSheetModalProvider>
+      </AuthProvider>
     </RestyleThemeProvider>
   );
 }
@@ -120,4 +128,4 @@ export default function App() {
       </RootSiblingParent>
     </GestureHandlerRootView>
   );
-};
+}

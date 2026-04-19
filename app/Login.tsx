@@ -1,166 +1,280 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
+﻿import {
+  BottomSheetBackdrop,
+  BottomSheetModal,
+  BottomSheetView,
+} from '@gorhom/bottom-sheet';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '@shopify/restyle';
-import { showErrorToast, showSuccessToast } from '../utils/toast';
-import { useAuth } from '../context/AuthContext';
-import { loginWithGoogle } from '../services/appwrite/auth';
-import { Chrome } from 'lucide-react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Controller, useForm } from 'react-hook-form';
+import {
+  Keyboard,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { z } from 'zod';
 import AppLogo from '../components/AppLogo';
+import type { AuthStackParamList } from '../components/AuthNavigator';
+import { useAuth } from '../context/AuthContext';
+import { sendAuthCode } from '../services/phoneAuthApi';
 import type { Theme } from '../theme/restyleTheme';
+import { showErrorToast, showSuccessToast } from '../utils/toast';
+import OtpVerifyScreen from './OtpVerify';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+type LoginNav = NativeStackNavigationProp<AuthStackParamList, 'Login'>;
+
+const digitsOnly = (s: string) => s.replace(/\D/g, '');
+
+const schema = z.object({
+  countryDial: z
+    .string()
+    .transform((s) => digitsOnly(s) || '91')
+    .pipe(z.string().min(1).max(4)),
+  phone: z
+    .string()
+    .min(1, 'Enter your phone number')
+    .refine((v) => digitsOnly(v).length >= 6, 'Enter a valid phone number'),
+});
+
+type FormValues = z.input<typeof schema>;
 
 export default function LoginScreen() {
-	const { login } = useAuth();
-	const navigation = useNavigation();
-	const theme = useTheme<Theme>();
-	const [email, setEmail] = useState('');
-	const [password, setPassword] = useState('');
-	const [submitting, setSubmitting] = useState(false);
+  const navigation = useNavigation<LoginNav>();
+  const theme = useTheme<Theme>();
+  const insets = useSafeAreaInsets();
+  const { completePhoneLogin } = useAuth();
+  const bottomSheetModalRef = useRef<BottomSheetModal>(null);
+  const otpRef = useRef<{ resetTimer: () => void }>(null);
+  const {
+    control,
+    handleSubmit,
+    formState: { isSubmitting },
+  } = useForm<FormValues>({
+    defaultValues: { countryDial: '91', phone: '' },
+    resolver: zodResolver(schema),
+  });
 
-	const onSubmit = async () => {
-		if (!email || !password) {
-			showErrorToast('Missing fields', 'Please enter email and password.');
-			return;
-		}
-		setSubmitting(true);
-		const res = await login(email, password);
-		if (res.ok) {
-			showSuccessToast('Welcome back!', res.message);
-		} else {
-			showErrorToast('Login failed', res.message);
-		}
-		setSubmitting(false);
-	};
+  const inputStyle = useMemo(
+    () => ({
+      borderColor: theme.colors.input,
+      backgroundColor: theme.colors.muted,
+      color: theme.colors.foreground,
+    }),
+    [theme.colors.input, theme.colors.muted, theme.colors.foreground],
+  );
 
-	return (
-		<View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-			<View style={styles.logoWrap}>
-				<AppLogo width={72} height={72} />
-			</View>
-			<Text style={[styles.title, { color: theme.colors.foreground }]}>Sign In</Text>
-			<TextInput
-				style={[
-					styles.input,
-					{
-						borderColor: theme.colors.input,
-						backgroundColor: theme.colors.muted,
-						color: theme.colors.foreground,
-					},
-				]}
-				placeholder="Email"
-				placeholderTextColor={theme.colors.mutedForeground}
-				autoCapitalize="none"
-				keyboardType="email-address"
-				value={email}
-				onChangeText={setEmail}
-			/>
-			<TextInput
-				style={[
-					styles.input,
-					{
-						borderColor: theme.colors.input,
-						backgroundColor: theme.colors.muted,
-						color: theme.colors.foreground,
-					},
-				]}
-				placeholder="Password"
-				placeholderTextColor={theme.colors.mutedForeground}
-				secureTextEntry
-				value={password}
-				onChangeText={setPassword}
-			/>
-			<TouchableOpacity
-				style={[
-					styles.primaryButton,
-					{ backgroundColor: theme.colors.primary },
-					submitting && { opacity: 0.6 },
-				]}
-				onPress={onSubmit}
-				disabled={submitting}
-			>
-				<Text style={[styles.primaryButtonText, { color: theme.colors.primaryForeground }]}>
-					Login
-				</Text>
-			</TouchableOpacity>
+  const [otpArgs, setOtpArgs] = useState<{
+    phone: string;
+    countryDial: string;
+  } | null>(null);
+  const snapPoints = useMemo(() => ['55%'], []);
 
-			<View style={{ height: 12 }} />
-			<TouchableOpacity
-				style={[
-					styles.socialButton,
-					{
-						backgroundColor: theme.colors.card,
-						borderColor: theme.colors.border,
-					},
-				]}
-				activeOpacity={0.85}
-				onPress={async () => {
-					try {
-						await loginWithGoogle();
-					} catch (e: any) {
-						showErrorToast('Google Sign-In failed', e?.message ?? 'Please try again.');
-					}
-				}}
-			>
-				<View style={styles.socialButtonContent}>
-					<Chrome size={18} color="#DB4437" />
-					<Text
-						style={[
-							styles.socialButtonText,
-							{ marginLeft: 8, color: theme.colors.foreground },
-						]}
-					>
-						Continue with Google
-					</Text>
-				</View>
-			</TouchableOpacity>
+  const closeOtpSheet = () => {
+    bottomSheetModalRef.current?.dismiss();
+    setOtpArgs(null);
+  };
 
-			<TouchableOpacity onPress={() => navigation.navigate('Register' as never)}>
-				<Text style={[styles.linkText, { color: theme.colors.primary }]}>
-					Don't have an account? Register
-				</Text>
-			</TouchableOpacity>
-		</View>
-	);
+  const renderBackdrop = useCallback(
+    (backdropProps: any) => (
+      <BottomSheetBackdrop
+        {...backdropProps}
+        appearsOnIndex={0}
+        disappearsOnIndex={-1}
+        pressBehavior="close"
+      />
+    ),
+    [],
+  );
+
+  useEffect(() => {
+    if (otpArgs) {
+      bottomSheetModalRef.current?.present();
+    }
+  }, [otpArgs]);
+
+  const onResendOtp = async () => {
+    if (!otpArgs) return;
+    const res = await sendAuthCode({
+      phone: otpArgs.phone,
+      countryDial: otpArgs.countryDial,
+    });
+    if (res.ok) {
+      showSuccessToast('Code resent', res.message);
+      otpRef.current?.resetTimer();
+    } else {
+      showErrorToast('Could not resend', res.message);
+    }
+  };
+
+  const submit = handleSubmit(
+    async (values) => {
+      const phoneDigits = digitsOnly(values.phone);
+      const dial = values.countryDial;
+      const res = await sendAuthCode({ phone: phoneDigits, countryDial: dial });
+      if (res.status !== 200) {
+        showErrorToast('Could not send code', res.message);
+        return;
+      }
+      showSuccessToast('Code sent', res.message);
+      Keyboard.dismiss();
+      setOtpArgs({ phone: phoneDigits, countryDial: dial });
+    },
+    (err) => {
+      const msg =
+        err.phone?.message ?? err.countryDial?.message ?? 'Check your fields';
+      showErrorToast('Invalid', String(msg));
+    },
+  );
+
+  return (
+    <View
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+    >
+      <View style={styles.logoWrap}>
+        <AppLogo width={72} height={72} />
+      </View>
+      <Text style={[styles.title, { color: theme.colors.foreground }]}>
+        Sign In
+      </Text>
+
+      <View style={styles.phoneRow}>
+        <Controller
+          control={control}
+          name="countryDial"
+          render={({ field: { onChange, onBlur, value } }) => (
+            <TextInput
+              style={[styles.dialInput, inputStyle]}
+              placeholder="91"
+              placeholderTextColor={theme.colors.mutedForeground}
+              keyboardType="phone-pad"
+              value={value}
+              onBlur={onBlur}
+              onChangeText={onChange}
+              maxLength={4}
+            />
+          )}
+        />
+        <Controller
+          control={control}
+          name="phone"
+          render={({ field: { onChange, onBlur, value } }) => (
+            <TextInput
+              style={[styles.phoneInput, inputStyle]}
+              placeholder="Phone number"
+              placeholderTextColor={theme.colors.mutedForeground}
+              keyboardType="phone-pad"
+              value={value}
+              onBlur={onBlur}
+              onChangeText={onChange}
+            />
+          )}
+        />
+      </View>
+
+      <TouchableOpacity
+        style={[
+          styles.primaryButton,
+          { backgroundColor: theme.colors.primary },
+          isSubmitting && { opacity: 0.6 },
+        ]}
+        onPress={() => void submit()}
+        disabled={isSubmitting}
+      >
+        <Text
+          style={[
+            styles.primaryButtonText,
+            { color: theme.colors.primaryForeground },
+          ]}
+        >
+          Send code
+        </Text>
+      </TouchableOpacity>
+
+      <View style={{ height: 12 }} />
+      <BottomSheetModal
+        ref={bottomSheetModalRef}
+        snapPoints={snapPoints}
+        backdropComponent={renderBackdrop}
+        onDismiss={closeOtpSheet}
+        backgroundStyle={{ backgroundColor: theme.colors.background }}
+        handleIndicatorStyle={{ backgroundColor: theme.colors.border }}
+      >
+        <BottomSheetView
+          style={{
+            flex: 1,
+            paddingHorizontal: 16,
+            paddingTop: 16,
+            paddingBottom: 16 + insets.bottom,
+            backgroundColor: theme.colors.background,
+          }}
+        >
+          {otpArgs ? (
+            <OtpVerifyScreen
+              ref={otpRef}
+              phone={otpArgs.phone}
+              countryDial={otpArgs.countryDial}
+              onClose={closeOtpSheet}
+              onResendOtp={onResendOtp}
+              completePhoneLogin={completePhoneLogin}
+            />
+          ) : null}
+        </BottomSheetView>
+      </BottomSheetModal>
+
+      <TouchableOpacity onPress={() => navigation.navigate('Register')}>
+        <Text style={[styles.linkText, { color: theme.colors.primary }]}>
+          Don't have an account? Register
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
-	container: { flex: 1, padding: 16, justifyContent: 'center', backgroundColor: '#fff' },
-	title: { fontSize: 24, fontWeight: '700', marginBottom: 16, textAlign: 'center' },
-	logoWrap: { alignItems: 'center', marginBottom: 8 },
-	input: {
-		height: 44,
-		borderColor: '#D1D5DB',
-		borderWidth: 1,
-		borderRadius: 8,
-		paddingHorizontal: 12,
-		backgroundColor: '#F9FAFB',
-		marginBottom: 12,
-	},
-	socialButtonContent: {
-		flexDirection: 'row',
-		alignItems: 'center',
-		justifyContent: 'center',
-	},
-	primaryButton: {
-		height: 44,
-		borderRadius: 999,
-		alignItems: 'center',
-		justifyContent: 'center',
-		backgroundColor: '#111827',
-		marginTop: 8,
-	},
-	primaryButtonText: { color: '#fff', fontWeight: '600', fontSize: 16 },
-	socialButton: {
-		height: 44,
-		borderRadius: 999,
-		alignItems: 'center',
-		justifyContent: 'center',
-		backgroundColor: '#FFFFFF',
-		borderWidth: 1,
-		borderColor: '#E5E7EB',
-	},
-	socialButtonText: { color: '#111827', fontWeight: '600', fontSize: 16 },
-	linkText: { textAlign: 'center', marginTop: 16, color: '#1E40AF' },
+  container: {
+    flex: 1,
+    padding: 16,
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: '700',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  logoWrap: { alignItems: 'center', marginBottom: 8 },
+  phoneRow: { flexDirection: 'row', gap: 10, marginBottom: 12 },
+  dialInput: {
+    width: 64,
+    height: 44,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    textAlign: 'center',
+    fontWeight: '600',
+  },
+  phoneInput: {
+    flex: 1,
+    height: 44,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+  },
+  primaryButton: {
+    height: 44,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#111827',
+    marginTop: 8,
+  },
+  primaryButtonText: { color: '#fff', fontWeight: '600', fontSize: 16 },
+  linkText: { textAlign: 'center', marginTop: 16, color: '#1E40AF' },
 });
-
-

@@ -32,7 +32,6 @@ export type InvestmentDetailsTransaction = {
   description?: string;
 };
 
-
 // Expenditure timeline
 
 export type ExpenditureDoc = {
@@ -74,7 +73,10 @@ export type NotificationAvatarButtonProps = {
 // Toggle
 export type ToggleProps = {
   value: boolean;
-  onValueChange: (next: boolean, e?: GestureResponderEvent) => void | Promise<void>;
+  onValueChange: (
+    next: boolean,
+    e?: GestureResponderEvent,
+  ) => void | Promise<void>;
   disabled?: boolean;
   width?: number;
   height?: number;
@@ -160,7 +162,6 @@ export type AppLogoProps = {
 // toast
 export type ToastPosition = 'top' | 'bottom';
 
-
 // themes
 export type ThemeMode = 'light' | 'dark';
 
@@ -202,17 +203,24 @@ export type DateFormatContextValue = {
 export type AuthContextValue = {
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<{ ok: boolean; message: string }>;
-  register: (name: string, email: string, password: string) => Promise<{ ok: boolean; message: string }>;
+  register: (
+    name: string,
+    email: string,
+    password: string,
+  ) => Promise<{ ok: boolean; message: string }>;
+  /** After phone OTP is verified by your API, persist session like email login. */
+  completePhoneLogin: (user: {
+    phone: string;
+    countryDial?: string;
+  }) => Promise<{ ok: boolean; message: string }>;
   logout: () => Promise<void>;
   user: { id: string; email: string; name?: string } | null;
 };
 
-
 export type ChartPoint = {
   value: number;
   label: string;
-}
+};
 
 export type ChartComponentProps = {
   title?: string;
